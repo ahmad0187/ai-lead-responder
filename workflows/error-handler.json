@@ -1,0 +1,105 @@
+{
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "id": "8e0d1be6-22ab-4616-9523-5fadef77693e",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "218936c2-787b-4b34-b7ef-e36c39dec20c",
+      "name": "Build Error Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "jsCode": "// Turns n8n's error data into a readable alert.\nconst e = $input.first().json;\nconst msg = [\n  ':rotating_light: *n8n workflow failed*',\n  '*Workflow:* ' + (e.workflow?.name || 'unknown'),\n  '*Failed node:* ' + (e.execution?.lastNodeExecuted || 'unknown'),\n  '*Error:* ' + (e.execution?.error?.message || 'no message'),\n  '*Execution:* ' + (e.execution?.url || e.execution?.id || 'n/a'),\n].join('\\n');\nreturn [{ json: {\n  text: msg,\n  // EDIT: same Slack webhook as the main workflow, and your own email.\n  slackWebhookUrl: 'https://hooks.slack.com/services/XXX/YYY/ZZZ',\n  alertEmail: 'YOUR_EMAIL@gmail.com',\n} }];"
+      }
+    },
+    {
+      "id": "8df36bec-739d-49e8-8288-f735b6aa4f7c",
+      "name": "Slack: Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.slackWebhookUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "f4743f01-ae17-4e05-af6b-b3bb4330ae89",
+      "name": "Gmail: Error Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        460,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "parameters": {
+        "sendTo": "={{ $json.alertEmail }}",
+        "subject": "n8n workflow failed",
+        "emailType": "text",
+        "message": "={{ $json.text.replace(/\\*/g, \"\") }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    }
+  ],
+  "connections": {
+    "On Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Message": {
+      "main": [
+        [
+          {
+            "node": "Slack: Error Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail: Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
